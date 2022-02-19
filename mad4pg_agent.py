@@ -9,6 +9,8 @@ from d4pg_agent import D4PG
 import numpy as np
 import torch
 import torch.nn.functional as F
+from collections import deque
+
 
 LR_ACTOR = 1e-4
 LR_CRITIC = 1e-3
@@ -175,6 +177,44 @@ class MAD4PG():
 
 
 
+def train_mad4pg(agent, n_agents, n_episodes, env, brain_name, check_pth='./checkpoints/checkpoint.pth'):
+	epi_scores = []
+	scores_window = deque(maxlen=100)
+
+	for i_episode in range(1, n_episodes + 1):
+		env_info = env.reset(train_mode=True)[brain_name]
+		states = env_info.vector_observations
+		scores = np.zeros(n_agents)
+		while True:
+			actions = agent.acts(states, mode='train')  # (n_agents, action_size)
+			env_info = env.step(actions)[brain_name]
+			next_states = env_info.vector_observations
+			rewards = env_info.rewards  # (n_agents,)
+			dones = env_info.local_done  # (n_agents,)
+
+			agent.step(states, actions, rewards, next_states, dones)
+
+			scores += env_info.rewards  # (n_agents,)
+			states = next_states  # (n_agents, state_size)
+			if np.any(dones):
+				break
+		scores_window.append(np.max(scores))
+		epi_scores.append(np.max(scores))
+		print('\rEpisode {:>4}\tAverage Score:{:>6.3f}\tMemory Size:{:>5}'.format(
+			i_episode, np.mean(scores_window), len(agent.memory)), end="")
+		if i_episode % 1000 == 0:
+			print('\rEpisode {:>4}\tAverage Score:{:>6.3f}\tMemory Size:{:>5}'.format(
+				i_episode, np.mean(scores_window), len(agent.memory)))
+		if np.mean(scores_window) > 0.6:
+			break
+	checkpoint = {
+		'actor0': agent.mad4pg_agent[0].actor_local.state_dict(),
+		'actor1': agent.mad4pg_agent[1].actor_local.state_dict(),
+		'critic0': agent.mad4pg_agent[0].critic_local.state_dict(),
+		'critic1': agent.mad4pg_agent[1].critic_local.state_dict()
+	}
+	torch.save(checkpoint, check_pth)
+	return epi_scores
 
 
 

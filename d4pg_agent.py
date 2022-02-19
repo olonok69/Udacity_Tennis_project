@@ -2,12 +2,12 @@
 The code is partially referred from 1. https://github.com/kelvin84hk/DRLND_P3_collab-compet
 
 '''
-
-
 import numpy as np
 from d4pg_model import Actor, CriticD4PG
-import torch
 import torch.optim as optim
+import torch
+from collections import deque
+
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -69,12 +69,5 @@ class D4PG():
 			action += self.epsilon * np.random.normal(size=action.shape)
 			action = np.clip(action, -1, 1)
 			return action
-
-
-
-
-
-
-
 
 
