@@ -3,10 +3,10 @@ The code is partially referred from 1. https://github.com/kelvin84hk/DRLND_P3_co
 
 '''
 import numpy as np
-from d4pg_model import Actor, CriticD4PG
+from src.model import Actor, CriticD4PG
 import torch.optim as optim
 import torch
-from collections import deque
+
 
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -29,7 +29,7 @@ class D4PG():
 		self.hard_update(self.actor_local, self.actor_target)
 		self.hard_update(self.critic_local, self.critic_target)
 
-		#self.noise = OUNoise(action_size)
+
 
 	def hard_update(self, local_model, target_model):
 		for target_param, local_param in zip(target_model.parameters(), local_model.parameters()):

@@ -4,40 +4,69 @@ The code is partially referred from 1. https://github.com/kelvin84hk/DRLND_P3_co
 '''
 
 
-from d4pg_memory import ReplayBuffer
-from d4pg_agent import D4PG
+from src.utils import ReplayBuffer
+from src.agent import D4PG
 import numpy as np
 import torch
 import torch.nn.functional as F
 from collections import deque
 
 
-LR_ACTOR = 1e-4
-LR_CRITIC = 1e-3
-GAMMA = 0.99
-REWARD_STEPS = 1 # steps for rewards of consecutive state action pairs
-BUFFER_SIZE = 100000
-BATCH_SIZE = 64
-N_ATOMS = 51
-Vmax = 1
-Vmin = -1
-DELTA_Z = (Vmax - Vmin) / (N_ATOMS - 1)
-TAU = 1e-3 # for soft update of target parameters
-LEARN_EVERY_STEP = 10
-LEARN_REPEAT = 1
+
 
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 class MAD4PG():
 
-	def __init__(self, state_size, action_size, seed):
+	def __init__(self,
+				 state_size,
+				 action_size,
+				 seed,
+				 LR_ACTOR,
+				 LR_CRITIC,
+				 GAMMA,
+				 REWARD_STEPS,
+				 BUFFER_SIZE,
+				 BATCH_SIZE,
+				 N_ATOMS,
+				 Vmax,
+				 Vmin,
+				 TAU,
+				 LEARN_EVERY_STEP,
+				 LEARN_REPEAT
+
+	):
+
+		self.seed = seed
+		self.state_size = state_size
+		self.action_size = action_size
 		self.t_step = 0
 		self.gamma = GAMMA
-		self.memory = ReplayBuffer(action_size, BUFFER_SIZE, BATCH_SIZE, seed)
+		self.lr_actor = LR_ACTOR
+		self.lr_critic = LR_CRITIC
+		self.reward_steps = REWARD_STEPS
+		self.buffer_size = BUFFER_SIZE
+		self.batch_size = BATCH_SIZE
+		self.n_atoms = N_ATOMS
+		self.vmax = Vmax
+		self.vmin = Vmin
+		self.delta_z = (self.vmax - self.vmin) / (self.n_atoms - 1)
+		self.tau = TAU
+		self.learn_every_step = LEARN_EVERY_STEP
+		self.learn_repeat = LEARN_REPEAT
+		# memory buffer
+		self.memory = ReplayBuffer(self.action_size, self.buffer_size, self.batch_size, self.seed)
 
-		self.mad4pg_agent = [D4PG(state_size, action_size, seed, LR_ACTOR, LR_CRITIC, N_ATOMS, Vmax, Vmin),
-							 D4PG(state_size, action_size, seed, LR_ACTOR, LR_CRITIC, N_ATOMS, Vmax, Vmin)]
+		self.mad4pg_agent = [D4PG(self.state_size, self.action_size, self.seed, self.lr_actor, self.lr_critic,
+								  self.n_atoms, self.vmax, self.vmin),
+							 D4PG(self.state_size, self.action_size, self.seed, self.lr_actor, self.lr_critic,
+								  self.n_atoms, self.vmax, self.vmin),
+							 D4PG(self.state_size, self.action_size, self.seed, self.lr_actor, self.lr_critic,
+								  self.n_atoms, self.vmax, self.vmin),
+							 D4PG(self.state_size, self.action_size, self.seed, self.lr_actor, self.lr_critic,
+								  self.n_atoms, self.vmax, self.vmin)
+							 ]
 
 	def acts(self, states, mode):
 		"""
@@ -71,7 +100,7 @@ class MAD4PG():
 		Q_targets_next = F.softmax(Q_targets_next, dim=1)
 
 		proj_distr_v = self.distr_projection(Q_targets_next, rewards, dones,
-										gamma=gamma ** REWARD_STEPS, device=device)
+										gamma=gamma ** self.reward_steps, device=device)
 		prob_dist_v = -F.log_softmax(Q_expected, dim=1) * proj_distr_v
 		critic_loss_v = prob_dist_v.sum(dim=1).mean()
 
@@ -94,8 +123,8 @@ class MAD4PG():
 		agent.actor_optimizer.step()
 
 		# ------------------- update target network ------------------- #
-		agent.soft_update(agent.critic_local, agent.critic_target, TAU)
-		agent.soft_update(agent.actor_local, agent.actor_target, TAU)
+		agent.soft_update(agent.critic_local, agent.critic_target, self.tau)
+		agent.soft_update(agent.actor_local, agent.actor_target, self.tau)
 
 
 	def distr_projection(self, next_distr_v, rewards_v, dones_mask_t, gamma, device):
@@ -103,11 +132,11 @@ class MAD4PG():
 		rewards = rewards_v.data.cpu().numpy()
 		dones_mask = dones_mask_t.cpu().numpy().astype(np.bool)
 		batch_size = len(rewards)
-		proj_distr = np.zeros((batch_size, N_ATOMS), dtype=np.float32)
+		proj_distr = np.zeros((self.batch_size, self.n_atoms), dtype=np.float32)
 
-		for atom in range(N_ATOMS):
-			tz_j = np.minimum(Vmax, np.maximum(Vmin, rewards + (Vmin + atom * DELTA_Z) * gamma))
-			b_j = (tz_j - Vmin) / DELTA_Z
+		for atom in range(self.n_atoms):
+			tz_j = np.minimum(self.vmax, np.maximum(self.vmin, rewards + (self.vmin + atom * self.delta_z) * gamma))
+			b_j = (tz_j - self.vmin) / self.delta_z
 			l = np.floor(b_j).astype(np.int64)
 			u = np.ceil(b_j).astype(np.int64)
 			eq_mask = u == l
@@ -118,8 +147,8 @@ class MAD4PG():
 
 		if dones_mask.any():
 			proj_distr[dones_mask] = 0.0
-			tz_j = np.minimum(Vmax, np.maximum(Vmin, rewards[dones_mask]))
-			b_j = (tz_j - Vmin) / DELTA_Z
+			tz_j = np.minimum(self.vmax, np.maximum(self.vmin, rewards[dones_mask]))
+			b_j = (tz_j - self.vmin) / self.delta_z
 			l = np.floor(b_j).astype(np.int64)
 			u = np.ceil(b_j).astype(np.int64)
 			eq_mask = u == l
@@ -150,31 +179,24 @@ class MAD4PG():
 
 		# activate learning every few steps
 		self.t_step = self.t_step + 1
-		if self.t_step % LEARN_EVERY_STEP == 0:
+		if self.t_step % self.learn_every_step == 0:
 			# Learn, if enough samples are available in memory
-			if len(self.memory) > BATCH_SIZE:
-				for _ in range(LEARN_REPEAT):
+			if len(self.memory) > self.batch_size:
+				for _ in range(self.learn_repeat):
 					b_a_states, b_a_actions, b_rewards, b_a_next_states, b_dones = self.memory.sample()
 
-					# b_a_states (batch_size, n_agents, states)
-					# b_a_actions (batch_size, n_agents, actions)
-					# b_rewards (batch_size, n_agents)
-					# b_a_next_states (batch_size, n_agents, next_states)
-					# b_dones (batch_size, n_agents)
-
+					j=0
 					for i, agent in enumerate(self.mad4pg_agent):
-						states = b_a_states[:,i,:].squeeze(1) # (batch_size, state_size)
-						actions = b_a_actions[:,i,:].squeeze(1) # (batch_size, action_size)
-						rewards = b_rewards[:,i] # (batch_size,)
-						next_states = b_a_next_states[:,i,:].squeeze(1) # (batch_size, next_states)
-						dones = b_dones[:,i] # (batch_size,)
+						if i % 2 == 0:
+							j=0
+						states = b_a_states[:,j,:].squeeze(1) # (batch_size, state_size)
+						actions = b_a_actions[:,j,:].squeeze(1) # (batch_size, action_size)
+						rewards = b_rewards[:,j] # (batch_size,)
+						next_states = b_a_next_states[:,j,:].squeeze(1) # (batch_size, next_states)
+						dones = b_dones[:,j] # (batch_size,)
 
-						self.learn(agent, states, actions, rewards, next_states, dones, GAMMA)
-
-
-
-
-
+						self.learn(agent, states, actions, rewards, next_states, dones, self.gamma)
+						j= j+1
 
 
 def train_mad4pg(agent, n_agents, n_episodes, env, brain_name, check_pth='./checkpoints/checkpoint.pth'):
@@ -205,7 +227,7 @@ def train_mad4pg(agent, n_agents, n_episodes, env, brain_name, check_pth='./chec
 		if i_episode % 1000 == 0:
 			print('\rEpisode {:>4}\tAverage Score:{:>6.3f}\tMemory Size:{:>5}'.format(
 				i_episode, np.mean(scores_window), len(agent.memory)))
-		if np.mean(scores_window) > 0.6:
+		if np.mean(scores_window) > 0.8:
 			break
 	checkpoint = {
 		'actor0': agent.mad4pg_agent[0].actor_local.state_dict(),
@@ -216,6 +238,18 @@ def train_mad4pg(agent, n_agents, n_episodes, env, brain_name, check_pth='./chec
 	torch.save(checkpoint, check_pth)
 	return epi_scores
 
+def play_agent(agent, path='./checkpoints/checkpoint.pth'):
+
+	checkpoint = torch.load(path, map_location=lambda storage, loc: storage)
+	actor0_state_dict = checkpoint['actor0']
+	actor1_state_dict = checkpoint['actor1']
+	critic0_state_dict = checkpoint['critic0']
+	critic1_state_dict = checkpoint['critic1']
+
+	agent.mad4pg_agent[0].actor_local.load_state_dict(actor0_state_dict)
+	agent.mad4pg_agent[1].actor_local.load_state_dict(actor1_state_dict)
+	agent.mad4pg_agent[0].critic_local.load_state_dict(critic0_state_dict)
+	agent.mad4pg_agent[1].critic_local.load_state_dict(critic1_state_dict)
 
 
 
