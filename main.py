@@ -23,7 +23,7 @@ def main():
         print("Activation Function must be 1--> Leaky Relu or 2--> Relu")
         return
     if args.mode != "compare" and args.mode != "compare_play" and args.mode != "plot" and args.mode != "hp_tuning":
-        file_name = "./Tennis_Windows_x86_64/Tennis.exe"
+        file_name = "Tennis_Windows_x86_64/Tennis.exe"
         worker_id = 1
         base_port = 5005
         if args.mode == "training":
