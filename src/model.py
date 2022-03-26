@@ -1,5 +1,6 @@
 '''
-The code is partially referred from 1. https://github.com/kelvin84hk/DRLND_P3_collab-compet
+The code is partially referred to code from book Deep reinforcement Learning Hands-on by Maxum Lapan
+chapter 8 Categorical DQN
 
 '''
 
@@ -28,7 +29,7 @@ def hidden_init(layer):
 
 class Actor(nn.Module):
 
-	def __init__(self, state_size, action_size, seed, fc1_units=64, fc2_units=64):
+	def __init__(self, state_size, action_size, seed, fc1_units=64, fc2_units=64, mode=1):
 		super(Actor, self).__init__()
 		self.seed = torch.manual_seed(seed)
 		self.fc1 = nn.Linear(state_size, fc1_units)
@@ -36,6 +37,7 @@ class Actor(nn.Module):
 		self.fc3 = nn.Linear(fc2_units, action_size)
 		self.b3 = nn.BatchNorm1d(action_size)
 		self.tanh = nn.Tanh()
+		self.mode = mode # by default (mode 1) leaky Relu, is not Relu
 		self.reset_parameters()
 
 	def reset_parameters(self):
@@ -44,9 +46,14 @@ class Actor(nn.Module):
 		self.fc3.weight.data.uniform_(-3e-3, 3e-3)
 
 	def forward(self, state):
-		x = F.leaky_relu(self.fc1(state))
-		x = F.leaky_relu(self.fc2(x))
-		x = F.leaky_relu(self.fc3(x))
+		if self.mode == 1:
+			x = F.leaky_relu(self.fc1(state))
+			x = F.leaky_relu(self.fc2(x))
+			x = F.leaky_relu(self.fc3(x))
+		else:
+			x = F.relu(self.fc1(state))
+			x = F.relu(self.fc2(x))
+			x = F.relu(self.fc3(x))
 		x = self.b3(x)
 		x = self.tanh(x)
 
@@ -54,9 +61,10 @@ class Actor(nn.Module):
 
 class CriticD4PG(nn.Module):
 
-	def __init__(self, state_size, action_size, seed, n_atoms, v_max, v_min, fc1_units=64, fc2_units=64):
+	def __init__(self, state_size, action_size, seed, n_atoms, v_max, v_min, fc1_units=64, fc2_units=64, mode=1):
 		super(CriticD4PG, self).__init__()
 		self.seed = torch.manual_seed(seed)
+		self.mode = mode
 		self.fc1 = nn.Linear(state_size, fc1_units)
 		self.fc2 = nn.Linear(fc1_units + action_size, fc2_units)
 		self.fc3 = nn.Linear(fc2_units, n_atoms)
@@ -70,15 +78,36 @@ class CriticD4PG(nn.Module):
 		self.fc3.weight.data.uniform_(-3e-3, 3e-3)
 
 	def forward(self, state, action):
-		# xs=torch.cat((state,action_oppo), dim=1)
-		xs = F.leaky_relu(self.fc1(state))
-		x = torch.cat((xs, action), dim=1)
-		x = F.leaky_relu(self.fc2(x))
+		"""
+		feed forward NN mode 1--> Leaky Relu, 2--> Relu
+		:param state:
+		:type state:
+		:param action:
+		:type action:
+		:return:
+		:rtype:
+		"""
+
+		if self.mode == 1:
+			xs = F.leaky_relu(self.fc1(state))
+			x = torch.cat((xs, action), dim=1)
+			x = F.leaky_relu(self.fc2(x))
+		else:
+			xs = F.relu(self.fc1(state))
+			x = torch.cat((xs, action), dim=1)
+			x = F.relu(self.fc2(x))
 		x = self.fc3(x)
 
 		return x
 
 	def distr_to_q(self, distr):
+		"""
+
+		:param distr:
+		:type distr:
+		:return:
+		:rtype:
+		"""
 		weights = F.softmax(distr, dim=1) * self.supports
 		res = weights.sum(dim=1)
 		return res.unsqueeze(dim=-1)

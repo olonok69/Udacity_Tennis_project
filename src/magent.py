@@ -5,19 +5,15 @@ The code is partially referred from 1. https://github.com/kelvin84hk/DRLND_P3_co
 
 
 from src.utils import ReplayBuffer
-from src.agent import D4PG
+from src.agent import d4pg
 import numpy as np
 import torch
 import torch.nn.functional as F
 from collections import deque
 
-
-
-
-
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-class MAD4PG():
+class multi_agent_d4pg():
 
 	def __init__(self,
 				 state_size,
@@ -34,7 +30,9 @@ class MAD4PG():
 				 Vmin,
 				 TAU,
 				 LEARN_EVERY_STEP,
-				 LEARN_REPEAT
+				 LEARN_REPEAT,
+				 number_agents = 2,
+				 af= 1
 
 	):
 
@@ -55,18 +53,20 @@ class MAD4PG():
 		self.tau = TAU
 		self.learn_every_step = LEARN_EVERY_STEP
 		self.learn_repeat = LEARN_REPEAT
+		self.number_agents = number_agents
+		self.af = af #
 		# memory buffer
 		self.memory = ReplayBuffer(self.action_size, self.buffer_size, self.batch_size, self.seed)
+		# build an agent
+		self.sagent = d4pg(self.state_size, self.action_size, self.seed, self.af, self.lr_actor,
+									  self.lr_critic, self.n_atoms, self.vmax, self.vmin)
+		if int(number_agents) > 1:
 
-		self.mad4pg_agent = [D4PG(self.state_size, self.action_size, self.seed, self.lr_actor, self.lr_critic,
-								  self.n_atoms, self.vmax, self.vmin),
-							 D4PG(self.state_size, self.action_size, self.seed, self.lr_actor, self.lr_critic,
-								  self.n_atoms, self.vmax, self.vmin),
-							 D4PG(self.state_size, self.action_size, self.seed, self.lr_actor, self.lr_critic,
-								  self.n_atoms, self.vmax, self.vmin),
-							 D4PG(self.state_size, self.action_size, self.seed, self.lr_actor, self.lr_critic,
-								  self.n_atoms, self.vmax, self.vmin)
-							 ]
+			self.mad4pg_agent = [ self.sagent for x in range(int(number_agents))]
+
+		# placeholder to track loss
+		self.critic_loss = []
+		self.actor_loss = []
 
 	def acts(self, states, mode):
 		"""
@@ -109,6 +109,7 @@ class MAD4PG():
 		critic_loss_v.backward()
 		torch.nn.utils.clip_grad_norm_(agent.critic_local.parameters(), 1)
 		agent.critic_optimizer.step()
+		self.critic_loss.append(critic_loss_v.item())
 
 		# ---------------------------- update actor ---------------------------- #
 		# Compute actor loss
@@ -122,12 +123,31 @@ class MAD4PG():
 		actor_loss_v.backward()
 		agent.actor_optimizer.step()
 
+		self.actor_loss.append(actor_loss_v.item())
+
 		# ------------------- update target network ------------------- #
 		agent.soft_update(agent.critic_local, agent.critic_target, self.tau)
 		agent.soft_update(agent.actor_local, agent.actor_target, self.tau)
 
 
 	def distr_projection(self, next_distr_v, rewards_v, dones_mask_t, gamma, device):
+		"""
+		from deep reinforcement learning Hands-on (Distributional Policy Gradients) pag 522
+		https://arxiv.org/abs/1707.06887
+
+		:param next_distr_v:
+		:type next_distr_v:
+		:param rewards_v:
+		:type rewards_v:
+		:param dones_mask_t:
+		:type dones_mask_t:
+		:param gamma:
+		:type gamma:
+		:param device:
+		:type device:
+		:return:
+		:rtype:
+		"""
 		next_distr = next_distr_v.data.cpu().numpy()
 		rewards = rewards_v.data.cpu().numpy()
 		dones_mask = dones_mask_t.cpu().numpy().astype(np.bool)
@@ -166,6 +186,7 @@ class MAD4PG():
 
 	def step(self, states, actions, rewards, next_states, dones):
 		"""
+		add experience to the buffer per each agent and call learn if memory > batch size
 
 		:param states (n_agents, state_size) (numpy): agents' state of current timestamp
 		:param actions (n_agents, action_size) (numpy): agents' action of current timestamp
@@ -199,7 +220,7 @@ class MAD4PG():
 						j= j+1
 
 
-def train_mad4pg(agent, n_agents, n_episodes, env, brain_name, check_pth='./checkpoints/checkpoint.pth'):
+def train_mad4pg(agent, n_agents, af, magents, n_episodes, env, brain_name, check_pth='./checkpoints/checkpoint.pth'):
 	epi_scores = []
 	scores_window = deque(maxlen=100)
 
@@ -229,27 +250,39 @@ def train_mad4pg(agent, n_agents, n_episodes, env, brain_name, check_pth='./chec
 				i_episode, np.mean(scores_window), len(agent.memory)))
 		if np.mean(scores_window) > 0.8:
 			break
-	checkpoint = {
-		'actor0': agent.mad4pg_agent[0].actor_local.state_dict(),
-		'actor1': agent.mad4pg_agent[1].actor_local.state_dict(),
-		'critic0': agent.mad4pg_agent[0].critic_local.state_dict(),
-		'critic1': agent.mad4pg_agent[1].critic_local.state_dict()
-	}
+	checkpoint= {}
+	for i in range(magents):
+
+		checkpoint[f'actor{i}'] = agent.mad4pg_agent[i].actor_local.state_dict()
+		checkpoint[f'critic{i}'] = agent.mad4pg_agent[i].critic_local.state_dict()
+
+
+	check_pth = f'./checkpoints/checkpoint_{magents}_{af}.pth'
 	torch.save(checkpoint, check_pth)
-	return epi_scores
+	return epi_scores, agent.actor_loss, agent.critic_loss
 
-def play_agent(agent, path='./checkpoints/checkpoint.pth'):
-
+def play_agent(agent, n_agents, af, path='./checkpoints/checkpoint.pth'):
+	"""
+	Play Agent
+	:param agent:
+	:type agent:
+	:param n_agents:
+	:type n_agents:
+	:param af:
+	:type af:
+	:param path:
+	:type path:
+	:return:
+	:rtype:
+	"""
+	path = f'./checkpoints/checkpoint_{n_agents}_{af}.pth'
 	checkpoint = torch.load(path, map_location=lambda storage, loc: storage)
-	actor0_state_dict = checkpoint['actor0']
-	actor1_state_dict = checkpoint['actor1']
-	critic0_state_dict = checkpoint['critic0']
-	critic1_state_dict = checkpoint['critic1']
+	for i in range(n_agents):
+		actor0_state_dict = checkpoint[f'actor{i}']
+		critic0_state_dict = checkpoint[f'critic{i}']
 
-	agent.mad4pg_agent[0].actor_local.load_state_dict(actor0_state_dict)
-	agent.mad4pg_agent[1].actor_local.load_state_dict(actor1_state_dict)
-	agent.mad4pg_agent[0].critic_local.load_state_dict(critic0_state_dict)
-	agent.mad4pg_agent[1].critic_local.load_state_dict(critic1_state_dict)
+		agent.mad4pg_agent[i].actor_local.load_state_dict(actor0_state_dict)
+		agent.mad4pg_agent[i].critic_local.load_state_dict(critic0_state_dict)
 
 
 

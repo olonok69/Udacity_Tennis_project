@@ -1,11 +1,11 @@
 from hyperopt import hp, fmin, tpe, Trials, STATUS_OK, space_eval
 from functools import partial
 from src.utils import *
-from src.magent import MAD4PG
+from src.magent import multi_agent_d4pg
 
 
 
-num_episodes =15000
+num_episodes =10000
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -31,21 +31,21 @@ def evaluate_model(hyperopt_params, env):
     brain_name = hyperopt_params['brain_name']
 
 
-    agent = MAD4PG(STATE_SIZE,
-                    ACTION_SIZE,
-                    SEED,
-                    LR_ACTOR,
-                    LR_CRITIC,
-                    GAMMA,
-                    REWARD_STEPS,
-                    BUFFER_SIZE,
-                    BATCH_SIZE,
-                    N_ATOMS,
-                    Vmax,
-                    Vmin,
-                    TAU,
-                    LEARN_EVERY_STEP,
-                    LEARN_REPEAT)
+    agent = multi_agent_d4pg(STATE_SIZE,
+                             ACTION_SIZE,
+                             SEED,
+                             LR_ACTOR,
+                             LR_CRITIC,
+                             GAMMA,
+                             REWARD_STEPS,
+                             BUFFER_SIZE,
+                             BATCH_SIZE,
+                             N_ATOMS,
+                             Vmax,
+                             Vmin,
+                             TAU,
+                             LEARN_EVERY_STEP,
+                             LEARN_REPEAT)
 
 
     n_episodes = num_episodes
@@ -85,7 +85,7 @@ def evaluate_model(hyperopt_params, env):
 
     reward = np.mean(scores_window)
 
-    return {'loss': -reward, 'status': STATUS_OK, 'nepisodes': i_episode}
+    return {'loss': i_episode, 'status': STATUS_OK, 'reward': reward}
 
 def objective(params, env):
     output = evaluate_model(params, env)
@@ -128,7 +128,7 @@ def hp_tuning(file):
         fn=fmin_objective,
         space=search_space,
         algo=tpe.suggest,  # algorithm controlling how hyperopt navigates the search space
-        max_evals=40,
+        max_evals=30,
         trials=trials,
         verbose=True
         )#

@@ -11,27 +11,56 @@ import torch
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-class D4PG():
+class d4pg():
 
-	def __init__(self, state_size, action_size, seed, lr_actor, lr_critic, n_atoms, vmax, vmin, epsilon=0.3, device=device):
+	def __init__(self,
+				 state_size,
+				 action_size,
+				 seed,
+				 af,
+				 lr_actor,
+				 lr_critic,
+				 n_atoms,
+				 vmax,
+				 vmin,
+				 epsilon=0.3,
+				 device=device):
+		self.af= af
 		self.state_size = state_size
 		self.action_size = action_size
 		self.device = device
 		self.epsilon = epsilon
-		self.actor_local = Actor(state_size, action_size, seed).to(device)
-		self.actor_target = Actor(state_size, action_size, seed).to(device)
+		# Actor Network
+		self.actor_local = Actor(state_size, action_size, seed, fc1_units=64, fc2_units=64,
+								 mode=self.af).to(device)
+		self.actor_target = Actor(state_size, action_size, seed, fc1_units=64, fc2_units=64,
+								  mode=self.af).to(device)
+		# Optimizer Actor
 		self.actor_optimizer = optim.Adam(self.actor_local.parameters(), lr=lr_actor)
-
-		self.critic_local = CriticD4PG(state_size, action_size, seed, n_atoms, vmax, vmin).to(device)
-		self.critic_target = CriticD4PG(state_size, action_size, seed, n_atoms, vmax, vmin).to(device)
+		# Critic Network
+		self.critic_local = CriticD4PG(state_size, action_size, seed, n_atoms, vmax, vmin, fc1_units=64, fc2_units=64,
+									   mode=self.af).to(device)
+		self.critic_target = CriticD4PG(state_size, action_size, seed, n_atoms, vmax, vmin, fc1_units=64, fc2_units=64,
+										mode=self.af).to(device)
+		# Optimizer Critic
 		self.critic_optimizer = optim.Adam(self.critic_local.parameters(), lr=lr_critic)
 
+		# Initialize Networks
 		self.hard_update(self.actor_local, self.actor_target)
 		self.hard_update(self.critic_local, self.critic_target)
 
 
 
 	def hard_update(self, local_model, target_model):
+		"""
+		copy parameters from local to target
+		:param local_model:
+		:type local_model:
+		:param target_model:
+		:type target_model:
+		:return:
+		:rtype:
+		"""
 		for target_param, local_param in zip(target_model.parameters(), local_model.parameters()):
 			target_param.data.copy_(local_param.data)
 

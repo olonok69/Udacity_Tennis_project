@@ -50,7 +50,8 @@ class ReplayBuffer:
         self.seed = random.seed(seed)
 
     def add(self, states, actions, rewards, next_states, dones):
-        """Add a new experience to memory.
+        """
+        Add a new experience to memory.
 
         :param
             states (n_agents, state_size) (numpy)
@@ -94,12 +95,16 @@ class ReplayBuffer:
         """Return the current size of internal memory."""
         return len(self.memory)
 
-def plot_scores(scores, rolling_window=100):
-    '''Plot score and its moving average on the same chart.'''
+def plot_scores(scores,
+                nagents,
+                activation_function,
+                rolling_window=100):
+    '''
+    Plot score and its moving average on the same chart.'''
 
     fig = plt.figure(figsize=(10, 5))
     plt.plot(np.arange(len(scores)), scores, '-y', label='episode score')
-    plt.title('Episodic Score and rolling mean')
+    plt.title(f'Score and rolling mean. Number Agents {str(nagents)}, Activation Function {str(activation_function)}')
     rolling_mean = pd.Series(scores).rolling(rolling_window).mean()
     plt.plot(np.arange(len(scores)), rolling_mean, '-r', label='rolling_mean')
     plt.ylabel('score')
@@ -107,5 +112,48 @@ def plot_scores(scores, rolling_window=100):
     plt.legend()
     plt.tight_layout()
 
-    plt.savefig(f'images/scores_all.jpg')
+    plt.savefig(f'images/scores_all_{nagents}_{activation_function}.jpg')
     return
+
+def plot_critic_loss(scores,
+                nagents,
+                activation_function,
+                rolling_window=100):
+    '''
+    Plot critic loss and its moving average on the same chart.'''
+
+    fig = plt.figure(figsize=(10, 5))
+    plt.plot(np.arange(len(scores)), scores, '-y', label='episode score')
+    plt.title(f'Criticc Loss and rolling mean. Number Agents {str(nagents)}, '
+              f'Activation Function {str(activation_function)}')
+    rolling_mean = pd.Series(scores).rolling(rolling_window).mean()
+    plt.plot(np.arange(len(scores)), rolling_mean, '-r', label='rolling_mean')
+    plt.ylabel('loss')
+    plt.xlabel('episode #')
+    plt.legend()
+    plt.tight_layout()
+
+    plt.savefig(f'images/critic_loss_{nagents}_{activation_function}.jpg')
+    return
+
+def plot_actor_loss(scores,
+                nagents,
+                activation_function,
+                rolling_window=100):
+    '''
+    Plot actor loss and its moving average on the same chart.'''
+
+    fig = plt.figure(figsize=(10, 5))
+    plt.plot(np.arange(len(scores)), scores, '-y', label='episode score')
+    plt.title(f'Actor Loss and rolling mean. Number Agents {str(nagents)}, '
+              f'Activation Function {str(activation_function)}')
+    rolling_mean = pd.Series(scores).rolling(rolling_window).mean()
+    plt.plot(np.arange(len(scores)), rolling_mean, '-r', label='rolling_mean')
+    plt.ylabel('loss')
+    plt.xlabel('episode #')
+    plt.legend()
+    plt.tight_layout()
+
+    plt.savefig(f'images/actor_loss_{nagents}_{activation_function}.jpg')
+    return
+
