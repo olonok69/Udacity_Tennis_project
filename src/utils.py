@@ -5,6 +5,7 @@ import random
 import numpy as np
 import torch
 from unityagents import UnityEnvironment
+import pickle
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -157,3 +158,151 @@ def plot_actor_loss(scores,
     plt.savefig(f'images/actor_loss_{nagents}_{activation_function}.jpg')
     return
 
+
+def plot_scores_training_all():
+    """
+    plot all scores 2000 episodes
+    """
+    with open('./outputs/outcomes.pkl', 'rb') as handle:
+        data = pickle.load(handle)
+    labels = []
+    text = f"D4PG Agent 2 workers LeakyRelu ({max(data['agent_2_1']['scores']).round(2)})"
+    labels.append("D4PG Agent 2 workers LeakyRelu ")
+    num_episodes = "1000"
+    plt.figure(figsize=(16, 12))
+    plt.subplot(111)
+    plt.title(f'All Algorithm scores after solve environment score above +.8 average')
+    plt.axhline(y=2.5, color='r', linestyle='dotted')
+    plt.plot(np.arange(len(data['agent_2_1']['scores'])), data['agent_2_1']['scores'], label=text)
+
+    text = f"D4PG Agent 2 workers Relu ({max(data['agent_2_2']['scores']).round(2)})"
+    labels.append("D4PG Agent 2 workers Relu ")
+    plt.plot(np.arange(len(data['agent_2_2']['scores'])), data['agent_2_2']['scores'], label=text)
+
+    text = f"D4PG Agent 4 workers LeakyRelu ({max(data['agent_4_1']['scores']).round(2)})"
+    labels.append("D4PG Agent 4 workers LeakyRelu")
+    plt.plot(np.arange(len(data['agent_4_1']['scores'])), data['agent_4_1']['scores'], label=text)
+
+    text = f"D4PG Agent 4 workers Relu ({max(data['agent_4_2']['scores']).round(2)})"
+    labels.append("D4PG Agent 4 workers Relu")
+    plt.plot(np.arange(len(data['agent_4_2']['scores'])), data['agent_4_2']['scores'], label=text)
+
+    text = f"D4PG Agent 8 workers Relu ({max(data['agent_8_2']['scores']).round(2)})"
+    labels.append("D4PG Agent 8 workers Relu")
+    plt.plot(np.arange(len(data['agent_8_2']['scores'])), data['agent_8_2']['scores'], label=text)
+
+    text = f"D4PG Agent 8 workers LeakyRelu ({max(data['agent_8_1']['scores']).round(2)})"
+    labels.append("D4PG Agent 8 workers LeakyRelu")
+    plt.plot(np.arange(len(data['agent_8_1']['scores'])), data['agent_8_1']['scores'], label=text)
+
+    text = f"D4PG Agent 16 workers LeakyRelu ({max(data['agent_16_1']['scores']).round(2)})"
+    labels.append("D4PG Agent 16 workers LeakyRelu")
+    plt.plot(np.arange(len(data['agent_16_1']['scores'])), data['agent_16_1']['scores'], label=text)
+
+    text = f"D4PG Agent 16 workers Relu ({max(data['agent_16_2']['scores']).round(2)})"
+    labels.append("D4PG Agent 16 workers Relu")
+    plt.plot(np.arange(len(data['agent_16_2']['scores'])), data['agent_16_2']['scores'], label=text)
+
+    plt.ylabel('Score')
+    plt.xlabel('Episodes #')
+    title = "Algorithm and Max Score"
+    plt.legend(title=title)
+    plt.legend(bbox_to_anchor=(1.1, 1.05))
+    plt.savefig(f'images/scores_all_2.jpg')
+    return labels
+
+def plot_time_all(labels):
+
+    """
+    plot time to win env . Collect 13 yellow bananas
+    """
+    with open('outputs/outcomes.pkl', 'rb') as handle:
+        data = pickle.load(handle)
+
+    num_episodes = 2000
+    plt.figure(figsize=(16, 12))
+    plt.subplot(111)
+    plt.title(f'All Algorithm time to solve the environment. mean during at least 100 episodes of +.8')
+
+    scores = []
+    types = []
+    for key, i in zip(data.keys(), range(1, len(data.keys())+1)):
+        scores.append(data[key]['time'])
+        sc = data[key]['time']
+
+        types.append(i)
+
+        plt.bar(int(i), sc, label=labels[int(i) - 1] + " " +str(round(sc,0)))
+    plt.ylabel('Time')
+    plt.xlabel('Algorithm #')
+    title = "Algorithm and Time to solve Env"
+    plt.legend(title=title)
+    plt.ylim([0, 11000])
+    plt.tight_layout()
+    plt.savefig(f'images/time_scores_all.jpg')
+
+    return
+
+def plot_number_episodes(labels):
+    """
+
+    """
+
+    with open('outputs/outcomes.pkl', 'rb') as handle:
+        data = pickle.load(handle)
+
+    num_episodes = 2000
+    plt.figure(figsize=(16, 12))
+    plt.subplot(111)
+    plt.title(f'All Algorithm number of episodes to solve the environment. (Mean during at least 100 episodes of +.8)')
+    max_episodes=0
+    scores = []
+    types = []
+    for key, i in zip(data.keys(), range(1, len(data.keys())+1)):
+        scores.append(data[key]['time'])
+        sc = len(data[key]['scores'])
+
+        types.append(i)
+
+        plt.bar(int(i), sc, label=labels[i - 1] + " " +str(round(sc,0)))
+    plt.ylabel('Score')
+    plt.xlabel('Algorithm #')
+    title = "Algorithm and number episodes training"
+    plt.legend(title=title)
+    plt.ylim([0, max_episodes+10000])
+    plt.tight_layout()
+
+    plt.savefig(f'images/number_episodes_all.jpg')
+    return
+
+def plot_play_scores(labels):
+    """
+
+    """
+
+    with open('outputs/outcomes.pkl', 'rb') as handle:
+        data = pickle.load(handle)
+
+    num_episodes = 2000
+    plt.figure(figsize=(16, 12))
+    plt.subplot(111)
+    plt.title(f'All Algorithm play scores average 3 Episodes.')
+    max_episodes=0
+    scores = []
+    types = []
+    for key, i in zip(data.keys(), range(1, len(data.keys())+1)):
+        scores.append(data[key]['score_play'])
+        sc =data[key]['score_play']
+
+        types.append(i)
+
+        plt.bar(int(i), sc, label=labels[i - 1] + " " +str(round(data[key]['score_play'],2)))
+    plt.ylabel('Score')
+    plt.xlabel('Algorithm #')
+    title = "Algorithm and number episodes training"
+    plt.legend(title=title)
+    plt.ylim([0, 3])
+    plt.tight_layout()
+
+    plt.savefig(f'images/play_scores_all.jpg')
+    return

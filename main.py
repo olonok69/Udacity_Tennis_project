@@ -115,7 +115,6 @@ def main():
             pickle.dump(outputs, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
         env.close()
-
     elif args.mode == 'play':
 
         play_agent(agent, nagents,
@@ -153,5 +152,11 @@ def main():
         print(best_params)
         with open("outputs/trials.pickle", 'wb') as handle:
             pickle.dump(trials, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    elif args.mode == 'plot': # plot comparision all algos
+        labels = plot_scores_training_all()
+        plot_time_all(labels)
+        plot_number_episodes(labels)
+        plot_play_scores(labels)
+
 if __name__ == '__main__':
     main()
